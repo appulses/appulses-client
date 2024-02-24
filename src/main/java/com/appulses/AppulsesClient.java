@@ -1,11 +1,15 @@
 package com.appulses;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.util.Base64;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -25,32 +29,40 @@ public class AppulsesClient {
         if (properties.isEmpty()) {
             return false;
         }
-        String apiKey = properties.getProperty("appulses.apiKey");
-        String apiSecret = properties.getProperty("appulses.apiSecret");
-        String sectionId = properties.getProperty("appulses.sectionId");
-        String baseUrl = properties.getProperty("appulses.baseUrl");
+        String apiKey = properties.getProperty("apiKey");
+        String apiSecret = properties.getProperty("apiSecret");
+        String sectionId = properties.getProperty("sectionId");
+        String baseUrl = properties.getProperty("baseUrl");
+        String tokenUrl = properties.getProperty("tokenUrl");
 
         HttpClient client = HttpClient.newHttpClient();
 
         String token = null;
         try {
-            token = client.send(HttpRequest.newBuilder()
-                    .uri(URI.create(baseUrl + "/auth/token"))
+            String basic = Base64.getEncoder().encodeToString((apiKey + ":" + apiSecret).getBytes());
+            String response = client.send(HttpRequest.newBuilder()
+                    .uri(URI.create(tokenUrl))
                     .header("Content-Type", "application/x-www-form-urlencoded")
-                    .header("Authorization", "Basic " + apiKey + ":" + apiSecret)
+                    .header("Authorization", "Basic " + basic)
                     .POST(HttpRequest.BodyPublishers.ofString("grant_type=client_credentials&scopes=appulses.read+appulses.write"))
                     .build(), HttpResponse.BodyHandlers.ofString()).body();
-        } catch (IOException | InterruptedException e) {
+            JSONObject tokenResponse = new JSONObject(response);
+            token = tokenResponse.getString("access_token");
+        } catch (IOException | InterruptedException | JSONException e) {
             logger.log(Level.WARNING,"Could not get token from appulses.com api");
         }
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl))
+                .uri(URI.create(baseUrl + "/containers"))
                 .header("Content-Type", "application/json")
                 .header("Authorization", "Bearer " + token)
                 .POST(HttpRequest.BodyPublishers.ofString("{\"name\":\"My Service\",\"description\":\"My Service Description\", \"sectionId\": \"" + sectionId + "\"}"))
                 .build();
         try {
-            client.send(request, null);
+           HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+              if (response.statusCode() != 200) {
+                logger.log(Level.WARNING,"Could not add or update service in appulses.com api sectionId: "  + sectionId);
+                return false;
+              }
         } catch (IOException | InterruptedException e) {
             logger.log(Level.WARNING,"Could not add or update service in appulses.com api sectionId: "  + sectionId);
         }
@@ -93,22 +105,36 @@ public class AppulsesClient {
             return appProperties;
         }
 
-        String apiKey = appProperties.getProperty("appulses.apiKey");
-        String apiSecret = appProperties.getProperty("appulses.apiSecret");
+        String apiKey = appProperties.getProperty("apiKey");
+        String apiSecret = appProperties.getProperty("apiSecret");
+        String sectionId = appProperties.getProperty("sectionId");
 
-        String yamlApiKey = appYamlProperties.getProperty("appulses.apiKey");
-        String yamlApiSecret = appYamlProperties.getProperty("appulses.apiSecret");
+        String yamlApiKey = appYamlProperties.getProperty("apiKey");
+        String yamlApiSecret = appYamlProperties.getProperty("apiSecret");
+        String yamlSectionId = appYamlProperties.getProperty("sectionId");
 
         if (apiKey != null && apiSecret != null) {
-            appProperties.setProperty("appulses.apiKey", apiKey);
-            appProperties.setProperty("appulses.apiSecret", apiSecret);
+            appProperties.setProperty("apiKey", apiKey);
+            appProperties.setProperty("apiSecret", apiSecret);
         } else if (yamlApiKey != null && yamlApiSecret != null) {
-            appProperties.setProperty("appulses.apiKey", yamlApiKey);
-            appProperties.setProperty("appulses.apiSecret", yamlApiSecret);
+            appProperties.setProperty("apiKey", yamlApiKey);
+            appProperties.setProperty("apiSecret", yamlApiSecret);
         } else {
             logger.log(Level.WARNING,"No apiKey or apiSecret found in properties");
             return appProperties;
         }
+        if (sectionId != null) {
+            appProperties.setProperty("sectionId", sectionId);
+        } else if (yamlSectionId != null) {
+            appProperties.setProperty("sectionId", yamlSectionId);
+        } else {
+            logger.log(Level.WARNING,"No sectionId found in properties");
+            return appProperties;
+        }
+        String baseUrl = appYamlProperties.getProperty("baseUrl");
+        String tokenUrl = appYamlProperties.getProperty("tokenUrl");
+        appProperties.setProperty("baseUrl", baseUrl != null ? baseUrl : "https://appulses.com");
+        appProperties.setProperty("tokenUrl", tokenUrl != null ? tokenUrl : "https://appulses.com/oauth2/token");
         return appProperties;
     }
 }

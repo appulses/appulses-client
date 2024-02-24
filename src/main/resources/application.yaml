@@ -1,4 +1,3 @@
 appulses:
-    baseUrl: http://localhost:8081
-    apiKey: 77a22b38-ae86-4f12-be17-561f89866c04
-    apiSecret: 77a22b38-ae86-4f12-be17-561f89866c04
+    tokenUrl: http://localhost:8082/oauth2/token
+    baseUrl: http://localhost:8081/api
