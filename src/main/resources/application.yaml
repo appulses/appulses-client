@@ -1,0 +1,4 @@
+appulses:
+    baseUrl: http://localhost:8081
+    apiKey: 77a22b38-ae86-4f12-be17-561f89866c04
+    apiSecret: 77a22b38-ae86-4f12-be17-561f89866c04
